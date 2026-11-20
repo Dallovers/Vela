@@ -1,0 +1,52 @@
+[
+  {
+    "file": "sample-1.pcm",
+    "id": "douyin-Microsoft Huihui",
+    "expected": "打开抖音，把当前视频的链接复制下来，然后把链接发给我。"
+  },
+  {
+    "file": "sample-2.pcm",
+    "id": "correction-Microsoft Huihui",
+    "expected": "先不要发送，刚才的人名说错了，改成张静怡，保留已经写好的内容。"
+  },
+  {
+    "file": "sample-3.pcm",
+    "id": "mixed-Microsoft Huihui",
+    "expected": "请打开 DeepSeek，看看 Android 应用里的 PDF 文件，再找一下 GitHub。"
+  },
+  {
+    "file": "sample-4.pcm",
+    "id": "numbers-Microsoft Huihui",
+    "expected": "明天下午三点半提醒我开会，会议室在五楼，联系电话是一三八零零一三八零零零。"
+  },
+  {
+    "file": "sample-5.pcm",
+    "id": "long-Microsoft Huihui",
+    "expected": "先打开微信搜索联系人，找到以后核对一下名字。如果出现两个同名的人就问我，不要自己随便选择。打开聊天窗口以后，先把内容写好让我检查，确认以后再发送。"
+  },
+  {
+    "file": "sample-7.pcm",
+    "id": "douyin-Microsoft Kangkang",
+    "expected": "打开抖音，把当前视频的链接复制下来，然后把链接发给我。"
+  },
+  {
+    "file": "sample-8.pcm",
+    "id": "correction-Microsoft Kangkang",
+    "expected": "先不要发送，刚才的人名说错了，改成张静怡，保留已经写好的内容。"
+  },
+  {
+    "file": "sample-9.pcm",
+    "id": "mixed-Microsoft Kangkang",
+    "expected": "请打开 DeepSeek，看看 Android 应用里的 PDF 文件，再找一下 GitHub。"
+  },
+  {
+    "file": "sample-10.pcm",
+    "id": "numbers-Microsoft Kangkang",
+    "expected": "明天下午三点半提醒我开会，会议室在五楼，联系电话是一三八零零一三八零零零。"
+  },
+  {
+    "file": "sample-11.pcm",
+    "id": "long-Microsoft Kangkang",
+    "expected": "先打开微信搜索联系人，找到以后核对一下名字。如果出现两个同名的人就问我，不要自己随便选择。打开聊天窗口以后，先把内容写好让我检查，确认以后再发送。"
+  }
+]

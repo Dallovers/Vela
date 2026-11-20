@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Vela</string>
+    <string name="service_name">Vela 操作服务</string>
+    <string name="service_description">根据你启动的任务获取屏幕，执行点击、滑动、返回和文字填写。截图会发送至你配置的模型服务。运行时可点击屏幕上的停止任务按钮结束。</string>
+</resources>

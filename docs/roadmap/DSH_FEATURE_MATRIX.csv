@@ -1,0 +1,44 @@
+功能ID,功能,阶段,DSH证据,本项目状态,来源
+session-detail,对话详情,P1,真机已打开详情/入口,0.3.0 加入会话文件索引/近120步动作检查点与中断原因；完整轨迹/改动待补,feature_catalog.dart@v1.2.0
+artifacts,产出的文件,P2,真机已打开详情/入口,0.3.0 回复与完整代码块创建文件/同名不覆盖/会话索引真机通过；生成媒体与预览待补,feature_catalog.dart@v1.2.0
+files,文件,P2,真机已打开详情/入口,0.3.0 命名工作区隔离/UTF-8编辑导入导出/文本附件快照与模型读回真机通过；目录/二进制/模型文件工具待补,feature_catalog.dart@v1.2.0
+terminal,终端,P2,真机已打开详情/入口,待实现或待补齐,feature_catalog.dart@v1.2.0
+export,导出对话日志,P2,真机已打开详情/入口,0.3.0 可见对话Markdown与手机诊断JSONL导出；诊断实际保存读回通过；完整任务证据包待补,feature_catalog.dart@v1.2.0
+jobs,后台任务,P2,真机已打开详情/入口,待实现或待补齐,feature_catalog.dart@v1.2.0
+plan-goal,计划与目标,P1,真机已打开详情/入口,已有有序任务与编辑移动；独立目标管理待补,feature_catalog.dart@v1.2.0
+skills,技能,P4,源码注册确认，待逐项体验,待实现或待补齐,feature_catalog.dart@v1.2.0
+subagents,子代理,P4,源码注册确认，待逐项体验,待实现或待补齐,feature_catalog.dart@v1.2.0
+reference,引用文件和对话,P4,源码注册确认，待逐项体验,0.3.0 最多4个合计64KiB文本附件快照/排队/分支/重答；引用对话与其他文件类型待补,feature_catalog.dart@v1.2.0
+schedules,自动化任务,P4,真机已打开详情/入口,待实现或待补齐,feature_catalog.dart@v1.2.0
+plugins,插件,P4,真机已打开详情/入口,待实现或待补齐,feature_catalog.dart@v1.2.0
+cordis,cordis,P4,真机已打开详情/入口,待实现或待补齐,feature_catalog.dart@v1.2.0
+agent-team,智能体团队,P4,真机已打开详情/入口,待实现或待补齐,feature_catalog.dart@v1.2.0
+cot-translation,思考过程翻译,P4,真机已打开详情/入口,待实现或待补齐,feature_catalog.dart@v1.2.0
+voice-input,语音输入,P4,真机已打开详情/入口,0.3.4 本机 SenseVoice 听写及可编辑草稿／真机对照和麦克风验证,feature_catalog.dart@v1.2.0
+forum,论坛,P4,真机已打开详情/入口,待实现或待补齐,feature_catalog.dart@v1.2.0
+community,社区,P4,真机已打开详情/入口,待实现或待补齐,feature_catalog.dart@v1.2.0
+ds-bot,ds-bot,P4,源码注册确认，待逐项体验,待实现或待补齐,feature_catalog.dart@v1.2.0
+share-profile,分享配置,P4,源码注册确认，待逐项体验,待实现或待补齐,feature_catalog.dart@v1.2.0
+search,搜索对话,P1,真机已打开详情/入口,0.2.0 消息搜索/待答筛选/选择结果真机通过；大历史量待回归,feature_catalog.dart@v1.2.0
+workspaces,工作区,P2,真机已打开详情/入口,0.3.0 命名创建/切换/会话固定绑定/旧目录迁移兼容；重命名/删除/远程工作区待补,feature_catalog.dart@v1.2.0
+web,网页版,P3,源码注册确认，待逐项体验,待实现或待补齐,feature_catalog.dart@v1.2.0
+models,模型,P1,真机已打开详情/入口,0.2.3 加密常用模型配置/输入栏选择已实现，现有DeepSeek保存加载真机通过；自动模型发现/其他提供商待验,feature_catalog.dart@v1.2.0
+permission,权限,P1,真机已打开详情/入口,已有本机服务引导和通知请求；应用规则/确认模式待补,feature_catalog.dart@v1.2.0
+phone,手机操控,P1,真机已打开详情/入口,0.2.4 外部界面直接答复与读屏恢复真机通过；保留0.2.1执行保护及0.2.3模式切换；权限策略待补,feature_catalog.dart@v1.2.0
+remote,远程主机,P3,真机已打开详情/入口,待实现或待补齐,feature_catalog.dart@v1.2.0
+system-actions,系统操作,P4,源码注册确认，待逐项体验,待实现或待补齐,feature_catalog.dart@v1.2.0
+chat-send,发消息与接收回复,P1,真机完成一次无工具问候,0.3.0 去掉模式切换入口，新对话默认助手；旧文字会话/附件文字通道保留，SSE/手机执行均实际验证；统一工具调度待补,v1.2.0 源码/Release/真机
+chat-draft,输入栏展开与草稿保留,P1,真机体验输入展开；草稿归属由代码确认,0.2.0 输入展开及会话/问题持久草稿；覆盖安装后恢复真机通过,v1.2.0 源码/Release/真机
+chat-queue,排队与插话,P1,中文文案和发送代码确认；待真机长任务体验,0.2.1 改做这件事取消旧任务并恢复新要求真机通过；做完再处理保留队列,v1.2.0 源码/Release/真机
+chat-message-actions,复制/分享/朗读/分支/重试,P1,真机回复下可见入口；未逐项执行,0.3.0 原复制/分享/TTS/分支/重答保留；代码块复制/链接/回复保存文件已实现并验证文件产出；完整Markdown排版待补,v1.2.0 源码/Release/真机
+chat-folders,对话文件夹/归档/筛选,P1,真机侧栏可见筛选，完整流程待测,0.3.0 原命名/置顶/文件夹/归档保留；列表菜单和多选删除，选择单条确认删除真机通过；完整批量组合/独立文件夹管理待补,v1.2.0 源码/Release/真机
+local-runtime,本机 Linux/DSH 引擎管理,P2,启动及本机状态可见；安装细节待测,待实现或待补齐,v1.2.0 源码/Release/真机
+media,图像/视频/音频生成与配置,P4,chat_screen.dart/相关状态模块确认，待体验,待实现或待补齐,v1.2.0 源码/Release/真机
+tavern,酒馆/角色卡/聊天导入,P4,Release 说明确认，待体验,待实现或待补齐,v1.2.0 源码/Release/真机
+pets,桌宠/伙伴/创建宠物,P4,真机输入栏可见宠物；管理创建待测,待实现或待补齐,v1.2.0 源码/Release/真机
+theme,暗色/主题/壁纸/图标/语言,P1,真机暗色界面已体验；配置页待逐项核对,0.2.3 浅色/深色/跟随系统持久化与系统栏真机通过；壁纸/图标/语言待补,v1.2.0 源码/Release/真机
+backup,备份/恢复/隐私/诊断/更新,P3,源码/文档确认，待逐项体验,0.3.0 手机元数据诊断日志/滚动保留/查看/导出已真机；完整备份恢复/更新待补,v1.2.0 源码/Release/真机
+phone-control-details,无障碍/通知/确认/应用规则/读屏/停止,P1,真机打开手机操控及确认方式弹层；未开启其服务或改变确认模式,0.3.0 模型询问/真实阻塞待答浮层、重装恢复、动作检查点/中断原因/私有日志与复制链接门槛；应用规则/发送幂等待补,v1.2.0 源码/Release/真机
+remote-pair,SSH/Relay 配对与主机切换,P3,remote 入口与文档确认，待主机环境,待实现或待补齐,v1.2.0 源码/Release/真机
+accounts,订阅/账户/模型提供商,P3,登录流程实际打开；不记录凭据,待实现或待补齐,v1.2.0 源码/Release/真机
+platforms,Android/iOS/Harmony 适配,P5,本项目先 Android；其他平台列入范围，尚未实现,待实现或待补齐,v1.2.0 源码/Release/真机

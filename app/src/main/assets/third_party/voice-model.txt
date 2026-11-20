@@ -1,0 +1,11 @@
+Vela uses sherpa-onnx 1.12.30 by the sherpa-onnx contributors (Apache-2.0).
+Software source https://github.com/k2-fsa/sherpa-onnx
+See apache-2.0.txt and sherpa-onnx-license.txt.
+
+The unmodified model is SenseVoiceSmall by Alibaba Group / FunAudioLLM,
+converted to ONNX by Fangjun Kuang and the sherpa-onnx contributors.
+Model name sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.
+Source https://k2-fsa.github.io/sherpa/onnx/sense-voice/pretrained.html
+Original https://github.com/FunAudioLLM/SenseVoice
+Model terms are in sensevoice-model-license.txt and the model's LICENSE asset.
+Audio is processed locally by Vela.
