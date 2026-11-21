@@ -86,7 +86,10 @@ object DecisionParser {
                 val result = (json.opt("result") as? String)?.trim().orEmpty()
                 if (result.isBlank()) throw ModelActionRejectedException("missing_result", "完成决策必须包含观察结果")
                 if (ClarificationGuard.needsReply(result)) AgentDecision.AskUser(result.take(500), "助手需要你的补充，操作已暂停。", emptyList())
-                else AgentDecision.Complete(result.take(500))
+                else {
+                    if (result.length > 100000) throw ModelActionRejectedException("result_too_long", "讲解内容过长，请分段回答")
+                    AgentDecision.Complete(result)
+                }
             }
             else -> throw ModelActionRejectedException("unknown_decision", "模型返回了不支持的决策类型")
         }

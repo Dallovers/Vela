@@ -117,10 +117,8 @@ internal class DocumentReader(private val context: Context, private val media: D
             zip.getEntry("word/document.xml") != null -> chunk("docx", xmlText(zip, "word/document.xml"), offset)
             zip.getEntry("xl/workbook.xml") != null -> chunk("xlsx", spreadsheet(zip), offset)
             zip.getEntry("ppt/presentation.xml") != null -> {
-                val slides = zip.entries().asSequence().map { it.name }.filter { it.matches(Regex("ppt/slides/slide[0-9]+\\.xml")) }
-                    .sortedBy { it.substringAfterLast("slide").substringBefore('.').toInt() }.toList()
-                require(slides.size <= 2000) { "PPT 页数过多" }
-                chunk("pptx", boundedJoin(slides.asSequence().mapIndexed { index, path -> "第 ${index + 1} 张幻灯片\n" + xmlText(zip, path) }), offset)
+                val slides = officeParts(zip, "ppt/presentation.xml", "sldId")
+                chunk("pptx", boundedJoin(slides.asSequence().mapIndexed { index, part -> "第 ${index + 1} 张幻灯片\n" + xmlText(zip, part.second) }), offset)
             }
             else -> {
                 val entries = zip.entries().asSequence().drop(offset).take(41).toList()
@@ -143,13 +141,11 @@ internal class DocumentReader(private val context: Context, private val media: D
                 if (parser.eventType == XmlPullParser.END_TAG && parser.name == "si") shared.add(value.toString())
             }
         }
-        val sheets = zip.entries().asSequence().map { it.name }.filter { it.matches(Regex("xl/worksheets/sheet[0-9]+\\.xml")) }
-            .sortedBy { it.substringAfterLast("sheet").substringBefore('.').toInt() }.toList()
-        require(sheets.size <= 1000)
-        return boundedJoin(sheets.asSequence().map { path ->
+        val sheets = officeParts(zip, "xl/workbook.xml", "sheet")
+        return boundedJoin(sheets.asSequence().map { (label, path) ->
             val parser = xml(zip, path)
             buildString {
-                append("工作表 ").append(path).append("\n数值使用文件内存储值，公式显示缓存结果。\n")
+                append("工作表 ").append(label).append(" · ").append(path).append("\n数值使用文件内存储值，公式显示缓存结果。\n")
                 var type = ""
                 while (parser.next() != XmlPullParser.END_DOCUMENT) {
                     if (parser.eventType == XmlPullParser.START_TAG) when (parser.name) {
@@ -163,6 +159,31 @@ internal class DocumentReader(private val context: Context, private val media: D
                 }
             }
         })
+    }
+
+    private fun officeParts(zip: ZipFile, manifest: String, tag: String): List<Pair<String, String>> {
+        val directory = manifest.substringBeforeLast('/')
+        val relations = xml(zip, "$directory/_rels/${manifest.substringAfterLast('/')}.rels")
+        val targets = mutableMapOf<String, String>()
+        while (relations.next() != XmlPullParser.END_DOCUMENT) {
+            if (relations.eventType == XmlPullParser.START_TAG && relations.name == "Relationship" &&
+                relations.getAttributeValue(null, "TargetMode") != "External") {
+                targets[relations.getAttributeValue(null, "Id")] = relations.getAttributeValue(null, "Target")
+            }
+        }
+        val parser = xml(zip, manifest)
+        val parts = mutableListOf<Pair<String, String>>()
+        while (parser.next() != XmlPullParser.END_DOCUMENT) {
+            if (parser.eventType == XmlPullParser.START_TAG && parser.name == tag) {
+                val id = parser.getAttributeValue("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id")
+                val target = targets[id] ?: error("文档页面关系缺失")
+                val path = if (target.startsWith('/')) target.removePrefix("/") else "$directory/$target"
+                validateRelativePath(path)
+                parts.add((parser.getAttributeValue(null, "name") ?: (parts.size + 1).toString()) to path)
+                require(parts.size <= 2000) { "文档页面过多" }
+            }
+        }
+        return parts
     }
 
     private fun xml(zip: ZipFile, name: String): XmlPullParser {

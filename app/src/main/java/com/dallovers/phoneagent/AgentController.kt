@@ -35,6 +35,7 @@ data class AgentState(
     val activeWorkspaceId: String = WorkspacePaths.DEFAULT,
     val overlayStatus: String = "没有待答问题",
     val questionNavigation: Int = 0,
+    val secondaryPracticeStatus: String = "",
 )
 
 internal fun AgentState.pendingPhoneQuestion(): TaskSession? = sessions.firstOrNull {
@@ -731,6 +732,26 @@ class AgentController(context: Context) {
     fun captureScreen() = launchOperation("正在读取屏幕") {
         capture()
         status("截图已更新")
+    }
+
+    internal fun runSecondaryCalculatorPractice(calculation: SecondaryCalculation) = launchOperation("正在检查副屏") {
+        mutableState.update { it.copy(secondaryPracticeStatus = "正在检查副屏") }
+        journal.record("secondary_practice_start")
+        try {
+            val displayId = requireService().runSecondaryCalculator(calculation) { index, total ->
+                mutableState.update { it.copy(secondaryPracticeStatus = "副屏已完成 $index / $total 次点击") }
+                journal.record("secondary_practice_step", phase = "submitted", count = index)
+            }
+            val result = "副屏 $displayId 已读回 ${calculation.expression} = ${calculation.result}"
+            mutableState.update { it.copy(secondaryPracticeStatus = result, status = result) }
+            journal.record("secondary_practice_done", phase = "verified", count = displayId)
+        } catch (cancelled: CancellationException) {
+            mutableState.update { it.copy(secondaryPracticeStatus = "副屏试运行已停止") }
+            throw cancelled
+        } catch (error: Exception) {
+            mutableState.update { it.copy(secondaryPracticeStatus = error.message ?: "副屏试运行已暂停") }
+            throw error
+        }
     }
 
     fun manualAction(action: AgentAction) = launchOperation("2 秒后执行，请切换到练习界面") {

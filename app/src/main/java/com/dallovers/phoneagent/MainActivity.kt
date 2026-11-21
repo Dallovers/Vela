@@ -314,6 +314,20 @@ private fun AgentScreen(controller: AgentController) {
                     }
                     OutlinedButton(onClick = { controller.createRecoveryPractice() }, enabled = state.connected && !state.running && state.sessions.none { it.question != null }) { Text("检查浮层与中断恢复") }
                 }
+                if (tab == 2) AgentCard("副屏试运行") {
+                    var expression by rememberSaveable { mutableStateOf("37+58") }
+                    val calculation = SecondaryCalculation.parse(expression)
+                    Text("USB 实验。先用 scrcpy 在副屏打开计算器。开始后，你可以切换主屏。")
+                    OutlinedTextField(expression, { expression = it.take(18) }, label = { Text("加法算式") },
+                        enabled = !state.running, singleLine = true, isError = calculation == null, supportingText = {
+                            if (calculation == null) Text("输入两个 1–999 的整数，例如 37+58")
+                        })
+                    if (state.secondaryPracticeStatus.isNotBlank()) Text(state.secondaryPracticeStatus)
+                    OutlinedButton(onClick = { calculation?.let(controller::runSecondaryCalculatorPractice) },
+                        enabled = calculation != null && state.connected && !state.running && state.pendingPhoneQuestion() == null) {
+                        Text("在副屏试算")
+                    }
+                }
                 if (state.running) {
                     Text(state.status, style = MaterialTheme.typography.bodyMedium)
                     OutlinedButton(onClick = { controller.stop("会话已暂停") }) { Text("暂停任务") }
