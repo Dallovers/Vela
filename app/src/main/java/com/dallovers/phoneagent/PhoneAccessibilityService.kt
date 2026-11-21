@@ -144,36 +144,7 @@ class PhoneAccessibilityService : AccessibilityService() {
         try {
             delay(120)
             val rotationBefore = rotation()
-            val bitmap = suspendCancellableCoroutine { continuation ->
-                takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
-                    override fun onSuccess(result: ScreenshotResult) {
-                        val buffer = result.hardwareBuffer
-                        try {
-                            if (continuation.isActive) {
-                                val wrapped = Bitmap.wrapHardwareBuffer(buffer, result.colorSpace)
-                                    ?: error("截图解码失败，请重试")
-                                val copy = try { wrapped.copy(Bitmap.Config.ARGB_8888, false) } finally { wrapped.recycle() }
-                                checkNotNull(copy) { "截图内存不足，请结束其他应用后重试" }
-                                continuation.resume(copy)
-                            }
-                        } catch (error: Exception) {
-                            if (continuation.isActive) continuation.resumeWithException(error)
-                        } finally { buffer.close() }
-                    }
-
-                    // API 34 adds the secure-window code, which the callback's IntDef omits.
-                    @SuppressLint("SwitchIntDef")
-                    override fun onFailure(errorCode: Int) {
-                        val message = when (errorCode) {
-                            ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT -> "截图间隔过短，请稍后重试"
-                            ERROR_TAKE_SCREENSHOT_NO_ACCESSIBILITY_ACCESS -> "请重新启用无障碍操作服务"
-                            ERROR_TAKE_SCREENSHOT_SECURE_WINDOW -> "当前页面受到系统保护，请切换到普通界面后重试"
-                            else -> "截图失败，错误码 $errorCode，请重新启用操作服务后重试"
-                        }
-                        if (continuation.isActive) continuation.resumeWithException(IllegalStateException(message))
-                    }
-                })
-            }
+            val bitmap = readDisplayBitmap(Display.DEFAULT_DISPLAY)
             if (rotationBefore != rotation()) {
                 bitmap.recycle()
                 error("截图期间屏幕方向发生变化，请重新开始")
@@ -188,6 +159,40 @@ class PhoneAccessibilityService : AccessibilityService() {
             lastObservation = observation
             return ScreenFrame(bitmap, rotationBefore, observation, editorIdentity())
         } finally { stopButton?.visibility = View.VISIBLE }
+    }
+
+    internal suspend fun runSecondaryCalculator(calculation: SecondaryCalculation, onStep: (Int, Int) -> Unit): Int =
+        SecondaryCalculatorPractice(this, screenReader, ::readDisplayBitmap).run(calculation, onStep)
+
+    private suspend fun readDisplayBitmap(displayId: Int): Bitmap = suspendCancellableCoroutine { continuation ->
+        takeScreenshot(displayId, mainExecutor, object : TakeScreenshotCallback {
+            override fun onSuccess(result: ScreenshotResult) {
+                val buffer = result.hardwareBuffer
+                try {
+                    if (continuation.isActive) {
+                        val wrapped = Bitmap.wrapHardwareBuffer(buffer, result.colorSpace)
+                            ?: error("截图解码失败，请重试")
+                        val copy = try { wrapped.copy(Bitmap.Config.ARGB_8888, false) } finally { wrapped.recycle() }
+                        checkNotNull(copy) { "截图内存不足，请结束其他应用后重试" }
+                        continuation.resume(copy)
+                    }
+                } catch (error: Exception) {
+                    if (continuation.isActive) continuation.resumeWithException(error)
+                } finally { buffer.close() }
+            }
+
+            // API 34 adds the secure-window code, which the callback's IntDef omits.
+            @SuppressLint("SwitchIntDef")
+            override fun onFailure(errorCode: Int) {
+                val message = when (errorCode) {
+                    ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT -> "截图间隔过短，请稍后重试"
+                    ERROR_TAKE_SCREENSHOT_NO_ACCESSIBILITY_ACCESS -> "请重新启用无障碍操作服务"
+                    ERROR_TAKE_SCREENSHOT_SECURE_WINDOW -> "当前页面受到系统保护，请切换到普通界面后重试"
+                    else -> "截图失败，错误码 $errorCode，请重新启用操作服务后重试"
+                }
+                if (continuation.isActive) continuation.resumeWithException(IllegalStateException(message))
+            }
+        })
     }
 
     suspend fun execute(action: AgentAction, frame: ScreenFrame? = null) {
