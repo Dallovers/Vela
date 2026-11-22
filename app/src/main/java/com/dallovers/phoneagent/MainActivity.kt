@@ -46,6 +46,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    override fun onResume() {
+        super.onResume()
+        (application as AgentApplication).controller.setForeground(true)
+    }
+    override fun onPause() {
+        super.onPause()
+        (application as AgentApplication).controller.setForeground(false)
+    }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         openSession(intent, (application as AgentApplication).controller)
@@ -126,6 +134,7 @@ private fun AgentScreen(controller: AgentController) {
     var accessibilityHelp by rememberSaveable { mutableStateOf<String?>(null) }
     var advancedPhone by rememberSaveable { mutableStateOf(false) }
     var appearance by remember { mutableStateOf(controller.appearance()) }
+    var notificationsOn by remember { mutableStateOf(controller.notificationsEnabled()) }
     var profiles by remember { mutableStateOf(controller.modelProfiles()) }
     var profileName by rememberSaveable { mutableStateOf("") }
     var workspacePicker by remember { mutableStateOf(false) }
@@ -408,12 +417,23 @@ private fun AgentScreen(controller: AgentController) {
                         AgentCard("操作权限") {
                             Text("屏幕读取、点击与输入都由本应用的“Vela 操作服务”提供。你可以随时在系统设置中关闭。", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(if (state.connected) "操作服务已连接" else "操作服务未连接", color = MaterialTheme.colorScheme.primary)
-                            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("通知提醒", style = MaterialTheme.typography.titleSmall)
+                                    Text(if (notificationsOn) "问题等你回答、任务跑完时会提醒你。" else "已关闭：不提醒，只有打开应用才看得到结果。",
+                                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Switch(checked = notificationsOn, onCheckedChange = {
+                                    controller.setNotificationsEnabled(it); notificationsOn = it
+                                }, modifier = Modifier.semantics { contentDescription = "通知提醒" })
+                            }
+                            if (notificationsOn && android.os.Build.VERSION.SDK_INT >= 33) {
                                 ActionButton("允许任务提醒", !state.running) {
                                     (context as? ComponentActivity)?.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 41)
                                 }
                             }
-                            Text("有问题等你回答时，允许助手提醒你。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("关掉这个开关只会让助手不再提醒；系统层面的通知权限不受影响。",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         TextButton(onClick = { advancedPhone = !advancedPhone }) { Text(if (advancedPhone) "收起基础动作测试" else "基础动作测试") }
                         if (advancedPhone) {

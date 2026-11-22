@@ -47,7 +47,7 @@ class AgentController(context: Context) {
     private val drafts = context.getSharedPreferences("conversation_drafts", Context.MODE_PRIVATE)
     private val sessionRepository = SessionRepository(context)
     private val workspaceStore = WorkspaceStore(context)
-    private val questionNotifications = QuestionNotifications(context)
+    private val notifications = AgentNotifications(context)
     private val journal = RunJournal(java.io.File(context.filesDir, "run_logs"))
     internal val media = DeviceAttachments(appContext)
     private val modelClient = ModelClient(media::dataUrl)
@@ -77,10 +77,27 @@ class AgentController(context: Context) {
     private var notificationUrgent: Boolean? = null
     private var questionWindowEvent: String? = null
     private var reminderJob: Job? = null
+    /** 界面是否在前台。只有前台且正看着这条会话时才不打扰。 */
+    private var foreground = false
+    /** 应用内通知开关，默认开。关掉后两类通知都不发，系统权限本身不动。 */
+    private var notificationsOn = settingsStore.notificationsEnabled()
 
     init {
         journal.record("process_started", count = restoredSessions.count { it.status == SessionStatus.PAUSED })
         trackPendingQuestion()
+    }
+    /** 由 Activity 的 onResume / onPause 同步；回到前台顺手收掉上次留下的完成通知。 */
+    fun setForeground(visible: Boolean) {
+        foreground = visible
+        if (visible) notifications.clearCompleted()
+    }
+    fun notificationsEnabled(): Boolean = notificationsOn
+    /** 关掉时把已经挂着的通知一起收掉，不留一条点不动的旧提醒。 */
+    fun setNotificationsEnabled(enabled: Boolean) {
+        notificationsOn = enabled
+        runCatching { settingsStore.setNotificationsEnabled(enabled) }.onFailure { status(it.message ?: "通知设置保存失败") }
+        if (!enabled) notifications.clearAll()
+        journal.record("notification_setting", phase = if (enabled) "enabled" else "disabled")
     }
     fun exportRunLogs(): String = journal.export()
     fun recentRunLogs(): List<String> = journal.export().lineSequence().filter(String::isNotBlank).toList().takeLast(60).mapNotNull { line ->
@@ -104,7 +121,7 @@ class AgentController(context: Context) {
         notificationUrgent = null
         reminderJob?.cancel()
         if (pending == null) {
-            questionNotifications.clear()
+            notifications.clearQuestion()
             overlayStatus("没有待答问题")
             return
         }
@@ -117,8 +134,12 @@ class AgentController(context: Context) {
     }
 
     private fun postQuestionReminder(session: TaskSession, urgent: Boolean, force: Boolean = false) {
+        if (!notificationsOn) {
+            journal.record("question_notification", session.id, session.question?.taskId.orEmpty(), phase = "disabled")
+            return
+        }
         if (!force && (notificationUrgent == urgent || notificationUrgent == true)) return
-        val result = questionNotifications.show(session.id, urgent)
+        val result = notifications.showQuestion(session.id, urgent)
         notificationUrgent = urgent
         journal.record("question_notification", session.id, session.question?.taskId.orEmpty(),
             action = if (urgent) "fallback" else "normal", phase = result)
@@ -681,8 +702,21 @@ class AgentController(context: Context) {
     }
 
     private fun updateSession(id: String, transform: (TaskSession) -> TaskSession) {
+        val before = mutableState.value.sessions.firstOrNull { it.id == id }
         val next = mutableState.value.sessions.map { session -> if (session.id == id) transform(session).copy(updatedAt = System.currentTimeMillis()) else session }
         persistSessions(next)
+        // 状态跃迁只有这里能观测到，所以完成提醒挂在这一个点上，任何一条跑完的路径都覆盖得到。
+        val after = next.firstOrNull { it.id == id }
+        if (before != null && after != null && TaskNoticeRules.justFinished(before.status, after.status)) noticeCompleted(after)
+    }
+
+    private fun noticeCompleted(session: TaskSession) {
+        if (!TaskNoticeRules.shouldPost(notificationsOn, foreground, state.value.selectedSessionId, session.id)) {
+            journal.record("completion_notification", session.id, phase = if (notificationsOn) "skipped_foreground" else "disabled")
+            return
+        }
+        val result = notifications.showCompleted(session.id, session.title, session.mode)
+        journal.record("completion_notification", session.id, phase = result)
     }
 
     fun saveSettings(settings: ModelSettings): Boolean = try {
@@ -769,10 +803,22 @@ class AgentController(context: Context) {
     private fun pauseSessions(failure: String? = null) {
         val sessions = mutableState.value.sessions
         if (sessions.none { it.status == SessionStatus.RUNNING }) return
+        val stopped = sessions.filter { it.status == SessionStatus.RUNNING }
         persistSessions(sessions.map { session -> if (session.status == SessionStatus.RUNNING)
             session.copy(status = if (failure == null) SessionStatus.PAUSED else SessionStatus.FAILED, notice = failure ?: "已暂停，点“继续”接着做。",
                 tasks = session.tasks.map { task -> if (task.status == TaskStatus.RUNNING)
                     task.copy(status = TaskStatus.PAUSED, result = failure.orEmpty()) else task }) else session })
+        // 只有带原因的暂停才是「不是用户自己停的」：这个分支同时被用户手动停止（failure 为 null）
+        // 和异常收尾调用，所以闸口就设在这里，不用再往会话数据里加暂停原因字段。
+        if (failure != null) stopped.forEach { noticeInterrupted(it, failure) }
+    }
+
+    private fun noticeInterrupted(session: TaskSession, reason: String) {
+        if (!TaskNoticeRules.shouldPost(notificationsOn, foreground, state.value.selectedSessionId, session.id)) {
+            journal.record("interruption_notification", session.id, phase = if (notificationsOn) "skipped_foreground" else "disabled")
+            return
+        }
+        journal.record("interruption_notification", session.id, phase = notifications.showInterrupted(session.id, session.title, reason))
     }
 
     fun clearLogs() { mutableState.update { it.copy(logs = emptyList()) } }
