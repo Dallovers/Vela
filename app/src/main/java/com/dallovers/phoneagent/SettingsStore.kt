@@ -34,6 +34,9 @@ class SettingsStore(context: Context) {
         )
     }
 
+    /** 只读模型名给导出用：导出永远不需要碰密钥，也就不解密。 */
+    fun modelName(): String = preferences.getString("model", "").orEmpty()
+
     fun save(settings: ModelSettings) {
         val encrypted = if (settings.apiKey.isEmpty()) "" else encrypt(settings.apiKey)
         check(preferences.edit()
