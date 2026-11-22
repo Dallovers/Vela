@@ -27,14 +27,20 @@ class AgentNotifications(private val context: Context) {
     }
 
     /**
-     * 一条会话跑完。完成通知固定占一个通知位（42）反复覆盖：多个任务连着跑完，
-     * 通知栏只留最新一条，宁可少提醒一次，也不堆一列。
+     * 一条会话的结果。完成和「没做完」共用同一个通知位（42）和同一个渠道：
+     * 对用户来说都是「这件事有结果了」，连着跑几个只留最新一条，不堆一列。
      */
-    fun showCompleted(sessionId: String, title: String, mode: ConversationMode): String {
-        blocked("completions", "任务完成提醒", NotificationManager.IMPORTANCE_DEFAULT)?.let { return it }
+    fun showCompleted(sessionId: String, title: String, mode: ConversationMode): String =
+        showResult(sessionId, TaskNoticeRules.completedTitle(title), TaskNoticeRules.body(mode))
+
+    fun showInterrupted(sessionId: String, title: String, reason: String): String =
+        showResult(sessionId, TaskNoticeRules.interruptedTitle(title), TaskNoticeRules.interruptText(reason))
+
+    private fun showResult(sessionId: String, title: String, text: String): String {
+        blocked("completions", "任务结果提醒", NotificationManager.IMPORTANCE_DEFAULT)?.let { return it }
         val intent = Intent(context, MainActivity::class.java).putExtra("sessionId", sessionId)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        return post(42, "completions", CompletionNoticeRules.title(title), CompletionNoticeRules.body(mode), intent, alertOnce = false)
+        return post(42, "completions", title, text, intent, alertOnce = false)
     }
 
     fun clearQuestion() { manager.cancel(41) }
@@ -63,7 +69,7 @@ class AgentNotifications(private val context: Context) {
 }
 
 /** 什么时候提醒、提醒时说什么，全是纯判断，单独拆出来是为了能直接单测。 */
-internal object CompletionNoticeRules {
+internal object TaskNoticeRules {
     /** 只有「跑着跑着跑完了」才提醒。用户自己停、被问题拦下、改需求换掉旧任务，都不提醒。 */
     fun justFinished(previous: SessionStatus, next: SessionStatus): Boolean =
         previous == SessionStatus.RUNNING && next == SessionStatus.COMPLETED
@@ -72,7 +78,13 @@ internal object CompletionNoticeRules {
     fun shouldPost(enabled: Boolean, foreground: Boolean, selectedSessionId: String?, sessionId: String): Boolean =
         enabled && !(foreground && selectedSessionId == sessionId)
 
-    fun title(sessionTitle: String): String = "「${summary(sessionTitle)}」已完成"
+    fun completedTitle(sessionTitle: String): String = "「${summary(sessionTitle)}」已完成"
+
+    fun interruptedTitle(sessionTitle: String): String = "「${summary(sessionTitle)}」没做完"
+
+    /** 停下来的原因就是错误信息，压成一行、截断，避免通知栏里半行字。 */
+    fun interruptText(reason: String): String =
+        reason.replace(Regex("\\s+"), " ").trim().take(60).ifBlank { "点这里看原因。" }
 
     fun body(mode: ConversationMode): String =
         if (mode == ConversationMode.CHAT) "点这里看回复。" else "点这里看执行结果。"

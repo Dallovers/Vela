@@ -707,11 +707,11 @@ class AgentController(context: Context) {
         persistSessions(next)
         // 状态跃迁只有这里能观测到，所以完成提醒挂在这一个点上，任何一条跑完的路径都覆盖得到。
         val after = next.firstOrNull { it.id == id }
-        if (before != null && after != null && CompletionNoticeRules.justFinished(before.status, after.status)) noticeCompleted(after)
+        if (before != null && after != null && TaskNoticeRules.justFinished(before.status, after.status)) noticeCompleted(after)
     }
 
     private fun noticeCompleted(session: TaskSession) {
-        if (!CompletionNoticeRules.shouldPost(notificationsOn, foreground, state.value.selectedSessionId, session.id)) {
+        if (!TaskNoticeRules.shouldPost(notificationsOn, foreground, state.value.selectedSessionId, session.id)) {
             journal.record("completion_notification", session.id, phase = if (notificationsOn) "skipped_foreground" else "disabled")
             return
         }
@@ -803,10 +803,22 @@ class AgentController(context: Context) {
     private fun pauseSessions(failure: String? = null) {
         val sessions = mutableState.value.sessions
         if (sessions.none { it.status == SessionStatus.RUNNING }) return
+        val stopped = sessions.filter { it.status == SessionStatus.RUNNING }
         persistSessions(sessions.map { session -> if (session.status == SessionStatus.RUNNING)
             session.copy(status = if (failure == null) SessionStatus.PAUSED else SessionStatus.FAILED, notice = failure ?: "已暂停，点“继续”接着做。",
                 tasks = session.tasks.map { task -> if (task.status == TaskStatus.RUNNING)
                     task.copy(status = TaskStatus.PAUSED, result = failure.orEmpty()) else task }) else session })
+        // 只有带原因的暂停才是「不是用户自己停的」：这个分支同时被用户手动停止（failure 为 null）
+        // 和异常收尾调用，所以闸口就设在这里，不用再往会话数据里加暂停原因字段。
+        if (failure != null) stopped.forEach { noticeInterrupted(it, failure) }
+    }
+
+    private fun noticeInterrupted(session: TaskSession, reason: String) {
+        if (!TaskNoticeRules.shouldPost(notificationsOn, foreground, state.value.selectedSessionId, session.id)) {
+            journal.record("interruption_notification", session.id, phase = if (notificationsOn) "skipped_foreground" else "disabled")
+            return
+        }
+        journal.record("interruption_notification", session.id, phase = notifications.showInterrupted(session.id, session.title, reason))
     }
 
     fun clearLogs() { mutableState.update { it.copy(logs = emptyList()) } }
