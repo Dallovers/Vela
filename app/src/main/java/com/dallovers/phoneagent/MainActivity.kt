@@ -147,6 +147,11 @@ private fun AgentScreen(controller: AgentController) {
     val drawerFocus = LocalFocusManager.current
     val uiScope = rememberCoroutineScope()
     val context = LocalContext.current
+    // "Not connected" covers two very different situations: the system switched the service off
+    // (the user has to re-enable it in Settings) or it is switched on and still attaching.
+    // The system is only asked while the service is down, so the normal path stays free of IPC.
+    val serviceAvailability = if (state.connected) ServiceAvailability.READY
+        else ServiceAvailabilityRules.of(false, context.enabledAccessibilityPackages(), context.packageName)
     val settings = ModelSettings(endpoint.trim(), model.trim(), key, thinking)
     val exportLogs = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri != null) uiScope.launch {
@@ -255,12 +260,25 @@ private fun AgentScreen(controller: AgentController) {
                 FilledTonalIconButton(onClick = { if (tab == 5) filesBack?.invoke() else if (tab != 0) tab = 0 else uiScope.launch { drawer.open() } }, modifier = Modifier.size(48.dp).semantics { contentDescription = if(tab != 0) "返回" else "打开对话列表" }) {
                     AgentGlyph(if (tab != 0) "back" else "menu")
                 }
-                Surface(onClick = { if (tab == 0 && state.selectedSessionId != null) detail = 0 }, shape = RoundedCornerShape(24.dp),
+                val serviceShortcut = tab == 0 && state.selectedSessionId == null &&
+                    serviceAvailability == ServiceAvailability.DISABLED
+                Surface(onClick = {
+                    // On the empty home screen this tap used to do nothing at all, so the state line
+                    // becomes a shortcut to the page that carries the accessibility settings button.
+                    if (serviceShortcut) tab = 2
+                    else if (tab == 0 && state.selectedSessionId != null) detail = 0
+                }, shape = RoundedCornerShape(24.dp),
                     color = MaterialTheme.colorScheme.surface, modifier = Modifier.weight(1f)) {
                     Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
                         Text(when(tab) { 1 -> "模型设置"; 2 -> "手机操控"; 3 -> "运行记录"; 4 -> "外观"; 5 -> "文件"; else -> state.sessions.firstOrNull { it.id == state.selectedSessionId }?.title ?: "新对话" },
                             maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                        Text(if(state.running) "正在处理" else if(state.connected) "本机已连接" else "操作服务未连接", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(when {
+                            state.running -> "正在处理"
+                            serviceAvailability == ServiceAvailability.READY -> "本机已连接"
+                            serviceAvailability == ServiceAvailability.STARTING -> "操作服务已开启，尚未连接"
+                            serviceShortcut -> "操作服务已关闭 · 点此开启"
+                            else -> "操作服务已关闭"
+                        }, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 if (tab == 0) FilledTonalIconButton(onClick = { controller.selectSession(null); detail = -1 }, modifier = Modifier.size(48.dp).semantics { contentDescription = "新对话" }) { AgentGlyph("new") }
@@ -285,11 +303,15 @@ private fun AgentScreen(controller: AgentController) {
                 }
             } else Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                if (tab == 2 && !state.connected) {
+                if (tab == 2 && serviceAvailability != ServiceAvailability.READY) {
                     AgentCard("开启本机操作服务") {
-                        Text("助手就在这台手机上运行。首次使用需要在系统无障碍页面开启“Vela 操作服务”。")
-                        Text("OPPO 开启路径", style = MaterialTheme.typography.titleSmall)
-                        Text("1. 打开下方的系统无障碍设置\n2. 点击“已下载的应用”\n3. 找到“Vela 操作服务”并开启\n4. 返回助手，确认顶部显示服务已连接")
+                        if (serviceAvailability == ServiceAvailability.DISABLED) {
+                            Text("系统当前没有启用“Vela 操作服务”。锁屏、强制停止或系统清理之后会出现这种情况，在下面的系统页面重新开启就能恢复，不需要重装。")
+                            Text("系统无障碍页面的入口名称（各品牌不同）", style = MaterialTheme.typography.titleSmall)
+                            Text("1. 打开下方的系统无障碍设置\n2. 进入“已安装的服务”或“已下载的应用”\n3. 找到“Vela 操作服务”并开启\n4. 返回助手，确认顶部显示“本机已连接”")
+                        } else {
+                            Text("服务已经开启，正在连接，通常几秒内自动完成。如果一直停在这里，用下面的按钮打开系统页面，把它关一次再开一次。")
+                        }
                         Button(onClick = {
                             accessibilityHelp = try {
                                 context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
@@ -407,7 +429,11 @@ private fun AgentScreen(controller: AgentController) {
                         }
                         AgentCard("操作权限") {
                             Text("屏幕读取、点击与输入都由本应用的“Vela 操作服务”提供。你可以随时在系统设置中关闭。", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(if (state.connected) "操作服务已连接" else "操作服务未连接", color = MaterialTheme.colorScheme.primary)
+                            Text(when (serviceAvailability) {
+                                ServiceAvailability.READY -> "操作服务已连接"
+                                ServiceAvailability.STARTING -> "操作服务已开启，尚未连接"
+                                ServiceAvailability.DISABLED -> "操作服务已被系统关闭，需要在系统无障碍页面重新开启"
+                            }, color = MaterialTheme.colorScheme.primary)
                             if (android.os.Build.VERSION.SDK_INT >= 33) {
                                 ActionButton("允许任务提醒", !state.running) {
                                     (context as? ComponentActivity)?.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 41)
