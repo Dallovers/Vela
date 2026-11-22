@@ -47,7 +47,7 @@ class AgentController(context: Context) {
     private val drafts = context.getSharedPreferences("conversation_drafts", Context.MODE_PRIVATE)
     private val sessionRepository = SessionRepository(context)
     private val workspaceStore = WorkspaceStore(context)
-    private val questionNotifications = QuestionNotifications(context)
+    private val notifications = AgentNotifications(context)
     private val journal = RunJournal(java.io.File(context.filesDir, "run_logs"))
     internal val media = DeviceAttachments(appContext)
     private val modelClient = ModelClient(media::dataUrl)
@@ -77,10 +77,17 @@ class AgentController(context: Context) {
     private var notificationUrgent: Boolean? = null
     private var questionWindowEvent: String? = null
     private var reminderJob: Job? = null
+    /** 界面是否在前台。只有前台且正看着这条会话时才不打扰。 */
+    private var foreground = false
 
     init {
         journal.record("process_started", count = restoredSessions.count { it.status == SessionStatus.PAUSED })
         trackPendingQuestion()
+    }
+    /** 由 Activity 的 onResume / onPause 同步；回到前台顺手收掉上次留下的完成通知。 */
+    fun setForeground(visible: Boolean) {
+        foreground = visible
+        if (visible) notifications.clearCompleted()
     }
     fun exportRunLogs(): String = journal.export()
     fun recentRunLogs(): List<String> = journal.export().lineSequence().filter(String::isNotBlank).toList().takeLast(60).mapNotNull { line ->
@@ -104,7 +111,7 @@ class AgentController(context: Context) {
         notificationUrgent = null
         reminderJob?.cancel()
         if (pending == null) {
-            questionNotifications.clear()
+            notifications.clearQuestion()
             overlayStatus("没有待答问题")
             return
         }
@@ -118,7 +125,7 @@ class AgentController(context: Context) {
 
     private fun postQuestionReminder(session: TaskSession, urgent: Boolean, force: Boolean = false) {
         if (!force && (notificationUrgent == urgent || notificationUrgent == true)) return
-        val result = questionNotifications.show(session.id, urgent)
+        val result = notifications.showQuestion(session.id, urgent)
         notificationUrgent = urgent
         journal.record("question_notification", session.id, session.question?.taskId.orEmpty(),
             action = if (urgent) "fallback" else "normal", phase = result)
@@ -681,8 +688,21 @@ class AgentController(context: Context) {
     }
 
     private fun updateSession(id: String, transform: (TaskSession) -> TaskSession) {
+        val before = mutableState.value.sessions.firstOrNull { it.id == id }
         val next = mutableState.value.sessions.map { session -> if (session.id == id) transform(session).copy(updatedAt = System.currentTimeMillis()) else session }
         persistSessions(next)
+        // 状态跃迁只有这里能观测到，所以完成提醒挂在这一个点上，任何一条跑完的路径都覆盖得到。
+        val after = next.firstOrNull { it.id == id }
+        if (before != null && after != null && CompletionNoticeRules.justFinished(before.status, after.status)) noticeCompleted(after)
+    }
+
+    private fun noticeCompleted(session: TaskSession) {
+        if (!CompletionNoticeRules.shouldPost(foreground, state.value.selectedSessionId, session.id)) {
+            journal.record("completion_notification", session.id, phase = "skipped_foreground")
+            return
+        }
+        val result = notifications.showCompleted(session.id, session.title, session.mode)
+        journal.record("completion_notification", session.id, phase = result)
     }
 
     fun saveSettings(settings: ModelSettings): Boolean = try {

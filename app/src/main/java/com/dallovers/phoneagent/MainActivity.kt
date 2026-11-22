@@ -46,6 +46,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    override fun onResume() {
+        super.onResume()
+        (application as AgentApplication).controller.setForeground(true)
+    }
+    override fun onPause() {
+        super.onPause()
+        (application as AgentApplication).controller.setForeground(false)
+    }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         openSession(intent, (application as AgentApplication).controller)
@@ -413,7 +421,7 @@ private fun AgentScreen(controller: AgentController) {
                                     (context as? ComponentActivity)?.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 41)
                                 }
                             }
-                            Text("有问题等你回答时，允许助手提醒你。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("有问题等你回答、任务跑完时，允许助手提醒你。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         TextButton(onClick = { advancedPhone = !advancedPhone }) { Text(if (advancedPhone) "收起基础动作测试" else "基础动作测试") }
                         if (advancedPhone) {
