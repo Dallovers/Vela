@@ -3,6 +3,7 @@ package com.dallovers.phoneagent
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -214,6 +215,23 @@ class AgentController(context: Context) {
     fun createWorkspace(name: String): Result<Unit> = runCatching {
         val info = workspaceStore.create(name)
         mutableState.update { it.copy(workspaces = workspaceStore.list(), activeWorkspaceId = info.id) }
+    }
+    fun renameWorkspace(id: String, name: String): Result<Unit> = runCatching {
+        workspaceStore.rename(id, name)
+        mutableState.update { it.copy(workspaces = workspaceStore.list()) }
+    }
+
+    /**
+     * Removes a workspace from the list. Sessions bound to it would lose their file root, so the
+     * removal is refused while any of them exists instead of silently re-pointing them.
+     * Returns the directory that still holds the files, or null when there is nothing of ours left.
+     */
+    fun deleteWorkspace(id: String): Result<File?> = runCatching {
+        val bound = state.value.sessions.count { it.workspaceId == id }
+        require(bound == 0) { "还有 $bound 个对话在这个工作区里，先删除这些对话再移除" }
+        val kept = workspaceStore.remove(id)
+        mutableState.update { it.copy(workspaces = workspaceStore.list(), activeWorkspaceId = workspaceStore.current()) }
+        kept
     }
     suspend fun readAttachments(workspaceId: String, names: List<String>): List<TextAttachment> = withContext(Dispatchers.IO) {
         require(names.size <= TextAttachment.MAX_FILES) { "最多选择 4 个附件" }
