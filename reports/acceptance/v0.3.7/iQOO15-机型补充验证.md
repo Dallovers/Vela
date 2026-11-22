@@ -194,10 +194,16 @@ execute(AgentAction("tap", …), fresh)   // 只有 isClickable == false 才会�
 复现步骤：在「操作服务未连接」状态下启动应用 → 开启无障碍服务使界面变为「本机已连接」→
 同批执行 `screencap` 与 `uiautomator dump`，两者不一致。
 
+补充观察：这条**只在有任意无障碍服务处于启用状态时**出现。把服务关掉之后，同一个节点的文本会刷新成
+当前值；重新开启后又停在旧值不再变。推测是 Compose 判定「无障碍已开启」，改为按事件通知变更，而
+轮询式读取（`uiautomator dump`，以及 Vela 自己的 `ScreenReader`）拿不到这次通知。若推测成立，受影响
+的是所有轮询读屏的实现，实时接收事件的读屏（TalkBack）可能不受影响——但这一点本次未能验证，因为
+验证需要同时装两个读屏并逐帧对照。
+
 可能原因（**未验证修法**）：`MainActivity.kt:263` 的状态文案是同一个 `Text` 的 `text` 参数，
 值变化时 Compose 只重组、未向无障碍层推送文本更新。可行方向是让节点随状态重建，例如
 `key(statusText) { Text(statusText, …) }`；或另行设置 `Modifier.semantics { contentDescription = statusText }`
-并实测读屏是否跟随。此次不改代码的原因是：安装本地构建必须先卸载现有 debug 包（签名不同，会清掉
+并实测读屏是否跟随。本次不处理该问题的原因是：安装本地构建必须先卸载现有 debug 包（签名不同，会清掉
 已有会话），无法在不影响设备现状的前提下验证。
 
 ## 与 OPPO 验收的差异（本机型新增记录）
