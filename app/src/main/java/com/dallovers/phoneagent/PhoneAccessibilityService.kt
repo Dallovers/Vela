@@ -295,11 +295,15 @@ class PhoneAccessibilityService : AccessibilityService() {
                 ?: throw InputActionUnavailableException("原生控件已失效或不唯一，未点击")
             currentCoroutineContext().ensureActive()
             if (node.isClickable) {
-                if (!node.performAction(AccessibilityNodeInfo.ACTION_CLICK))
-                    error("系统未确认控件点击，可能已产生效果；已暂停，请核对后再继续")
-                lastTargetDiagnostic = "screen=${expected.id} id=${target.id} source=native rechecked=true"
-                controller.log("目标点击已复核 · ${target.id} · 原生控件方式")
-                return
+                if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                    lastTargetDiagnostic = "screen=${expected.id} id=${target.id} source=native rechecked=true"
+                    controller.log("目标点击已复核 · ${target.id} · 原生控件方式")
+                    return
+                }
+                // performAction 返回 false 表示系统没有执行该动作。部分控件（如设置页搜索框）
+                // 标记了 clickable 却拒绝 ACTION_CLICK，此时降级为坐标点击，避免整条路径不可用。
+                // 若刚才那下其实已生效，重新观察时会因目标或画面已变化被拒绝，不会重复点击。
+                controller.log("原生点击未确认 · ${target.id} · 已降级为坐标点击")
             }
         }
         val fresh = capture()
@@ -315,9 +319,11 @@ class PhoneAccessibilityService : AccessibilityService() {
                 val node = screenReader.nativeNode(applicationRoot(), current)
                     ?: throw InputActionUnavailableException("原生控件已失效或不唯一，未点击")
                 if (node.isClickable) {
-                    if (!node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) error("系统未确认控件点击，可能已产生效果；已暂停，请核对后再继续")
-                    controller.log("目标点击已提交 · 原生控件方式")
-                    return
+                    if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                        controller.log("目标点击已提交 · 原生控件方式")
+                        return
+                    }
+                    controller.log("原生点击未确认 · ${target.id} · 已降级为坐标点击")
                 }
             }
             execute(AgentAction("tap", action.reason,
