@@ -101,12 +101,30 @@ class EvidenceBundleTest {
         assertTrue(name, name.matches(Regex("证据包-看屏幕-截图-说明-\\d{8}-\\d{4}\\.zip")))
     }
 
+    @Test fun readmeSurvivesAndSaysWhatWasOmitted() {
+        val entries = EvidenceBundle.build(session(), journal(), "gpt-x", at, utc, totalBudgetBytes = 64 * 1024 + 300)
+        val readme = entries.first { it.name == "README.txt" }.text
+        assertTrue(readme, readme.contains("这个包不完整"))
+        assertTrue(readme, readme.contains("省略 3 项"))
+        assertTrue(readme, readme.contains("tasks.json"))
+        val normal = EvidenceBundle.build(session(), journal(), "gpt-x", at, utc).first { it.name == "README.txt" }.text
+        assertFalse(normal, normal.contains("这个包不完整"))
+    }
+
+    @Test fun exportReportsHowManyPartsWereOmitted() {
+        val export = EvidenceBundle.export(session(), journal(), "gpt-x", at, utc, totalBudgetBytes = 64 * 1024 + 300)
+        assertEquals(3, export.omitted)
+        assertEquals(listOf("tasks.json", "trace/1-看屏幕说明.csv", "journal.jsonl"), export.dropped)
+        assertTrue(export.bytes.isNotEmpty())
+        assertEquals(0, EvidenceBundle.export(session(), journal(), "gpt-x", at, utc).omitted)
+    }
+
     @Test fun oversizedBundlesDropLowPriorityPartsAndRecordIt() {
         val entries = EvidenceBundle.build(session(), journal(), "gpt-x", at, utc, totalBudgetBytes = 64 * 1024 + 300)
-        assertEquals(listOf("manifest.json", "conversation.md"), entries.map { it.name })
+        assertEquals(listOf("manifest.json", "conversation.md", "README.txt"), entries.map { it.name })
         val manifest = JSONObject(entries.first().text)
-        assertEquals(listOf("tasks.json", "trace/1-看屏幕说明.csv", "journal.jsonl", "README.txt"), strings(manifest.getJSONArray("dropped")))
-        assertEquals(listOf("conversation.md"), objects(manifest.getJSONArray("files")).map { it.getString("name") })
+        assertEquals(listOf("tasks.json", "trace/1-看屏幕说明.csv", "journal.jsonl"), strings(manifest.getJSONArray("dropped")))
+        assertEquals(listOf("conversation.md", "README.txt"), objects(manifest.getJSONArray("files")).map { it.getString("name") })
     }
 
     @Test fun manifestListsEveryKeptFileWithItsHash() {

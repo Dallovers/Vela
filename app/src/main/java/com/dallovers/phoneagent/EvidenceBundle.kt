@@ -19,12 +19,32 @@ internal data class EvidenceEntry(val name: String, val text: String) {
 
 internal data class JournalSlice(val lines: List<String>, val matched: Int)
 
+/** 打包计划：最终条目，以及因为上限被丢掉 / 被截断的条目名。 */
+internal data class BundlePlan(
+    val entries: List<EvidenceEntry>,
+    val dropped: List<String>,
+    val truncated: List<String>,
+)
+
+/**
+ * 一次导出的成品。[omitted] 大于 0 时，界面必须明确告诉用户「少了东西」，
+ * 不能因为导出成功就让用户以为包是完整的。
+ */
+internal class BundleExport(
+    val bytes: ByteArray,
+    val dropped: List<String>,
+    val truncated: List<String>,
+) {
+    val omitted: Int = dropped.size + truncated.size
+}
+
 /**
  * 把一个对话导出成可复查的证据包：清单、可见对话、任务结构、执行轨迹、本次对话的运行日志。
  * 刻意不含模型密钥、接口地址、截图与图片内容、输入框正文、模型思考过程，
  * 也不复制附件原文（只记文件名与 SHA-256，原文还在工作区里）。
  *
- * 所有上限都是硬上限，并且一定会写进 manifest：宁可少写，也不静默丢内容。
+ * 所有上限都是硬上限，并且一定会写进 manifest 与 README：宁可少写，也不静默丢内容。
+ * 为了真能说清「少了什么」，README 自己不参与预算淘汰——它被丢掉恰恰是最需要它的时候。
  */
 internal object EvidenceBundle {
     const val SCHEMA = 1
@@ -55,7 +75,29 @@ internal object EvidenceBundle {
         now: Long,
         zone: TimeZone = TimeZone.getDefault(),
         totalBudgetBytes: Int = MAX_TOTAL_BYTES,
-    ): List<EvidenceEntry> {
+    ): List<EvidenceEntry> = plan(session, journalRaw, model, now, zone, totalBudgetBytes).entries
+
+    /** 打包并回传省略情况，给界面用；[build] 只要条目时仍可直接用。 */
+    fun export(
+        session: TaskSession,
+        journalRaw: String,
+        model: String,
+        now: Long,
+        zone: TimeZone = TimeZone.getDefault(),
+        totalBudgetBytes: Int = MAX_TOTAL_BYTES,
+    ): BundleExport {
+        val plan = plan(session, journalRaw, model, now, zone, totalBudgetBytes)
+        return BundleExport(zip(plan.entries), plan.dropped, plan.truncated)
+    }
+
+    private fun plan(
+        session: TaskSession,
+        journalRaw: String,
+        model: String,
+        now: Long,
+        zone: TimeZone,
+        totalBudgetBytes: Int,
+    ): BundlePlan {
         val rendered = mutableListOf<Pair<EvidenceEntry, Boolean>>()
         fun add(name: String, text: String, cut: Boolean = false) {
             val clipped = clip(name, text)
@@ -69,7 +111,6 @@ internal object EvidenceBundle {
         }
         val slice = journalSlice(journalRaw, session.id)
         add("journal.jsonl", slice.lines.joinToString("\n"), cut = slice.matched > slice.lines.size)
-        add("README.txt", readme(session, now, zone))
 
         val budget = totalBudgetBytes - MANIFEST_RESERVE
         val kept = mutableListOf<EvidenceEntry>()
@@ -83,8 +124,10 @@ internal object EvidenceBundle {
             } else dropped += entry.name
         }
         val truncated = rendered.filter { it.second }.map { it.first.name }
+        // README 要写「哪些被省略了」，所以先算出 dropped 再生成；它自己永远进包。
+        kept += EvidenceEntry("README.txt", readme(session, now, zone, dropped, truncated))
         val manifest = manifest(session, model, now, zone, kept, truncated, dropped)
-        return listOf(EvidenceEntry("manifest.json", manifest)) + kept
+        return BundlePlan(listOf(EvidenceEntry("manifest.json", manifest)) + kept, dropped, truncated)
     }
 
     fun clip(name: String, text: String): Pair<EvidenceEntry, Boolean> {
@@ -173,12 +216,24 @@ internal object EvidenceBundle {
             .toString(2)
     }
 
-    fun readme(session: TaskSession, now: Long, zone: TimeZone): String = buildString {
+    fun readme(
+        session: TaskSession,
+        now: Long,
+        zone: TimeZone = TimeZone.getDefault(),
+        dropped: List<String> = emptyList(),
+        truncated: List<String> = emptyList(),
+    ): String = buildString {
         append("Vela 任务证据包\n\n")
         append("对话：").append(session.title.replace('\n', ' ')).append("\n")
         append("编号：").append(session.id).append("\n")
         append("导出时间：").append(stamp(now, zone)).append("\n")
         append("格式版本：").append(SCHEMA).append("\n\n")
+        if (dropped.isNotEmpty() || truncated.isNotEmpty()) {
+            append("注意：这个包不完整。\n")
+            if (dropped.isNotEmpty()) append("  省略 ").append(dropped.size).append(" 项：").append(dropped.joinToString("、")).append("\n")
+            if (truncated.isNotEmpty()) append("  截断 ").append(truncated.size).append(" 项：").append(truncated.joinToString("、")).append("\n")
+            append("  原因是总大小超过上限。需要完整内容时，先清理对话里的长消息或附件，再重新导出。\n\n")
+        }
         append("包含：\n")
         append("  manifest.json   包清单：每个文件的字节数与 SHA-256\n")
         append("  conversation.md 你与助手的可见对话\n")

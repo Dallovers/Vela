@@ -93,11 +93,14 @@ internal fun ColumnScope.SessionWorkspace(
         if (uri != null && sessionId != null) scope.launch {
             exportingEvidence = true
             runCatching { withContext(Dispatchers.IO) {
-                val bytes = controller.evidenceBundle(sessionId)
-                context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(bytes) } ?: error("无法写入")
-                bytes.size
-            } }.onSuccess {
-                Toast.makeText(context, "证据包已导出（${if (it < 1024) "$it B" else "${it / 1024} KB"}）", Toast.LENGTH_LONG).show()
+                val bundle = controller.evidenceBundle(sessionId)
+                context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(bundle.bytes) } ?: error("无法写入")
+                bundle
+            } }.onSuccess { bundle ->
+                val size = bundle.bytes.size
+                val amount = if (size < 1024) "$size B" else "${size / 1024} KB"
+                val more = if (bundle.omitted > 0) "，已省略 ${bundle.omitted} 项，详见包内 README" else ""
+                Toast.makeText(context, "证据包已导出（$amount$more）", Toast.LENGTH_LONG).show()
             }.onFailure {
                 Toast.makeText(context, "证据包导出失败：${it.message ?: "请换个保存位置"}", Toast.LENGTH_LONG).show()
             }
