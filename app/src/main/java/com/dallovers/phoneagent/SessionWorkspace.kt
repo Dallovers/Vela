@@ -29,6 +29,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import java.time.LocalTime
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,6 +85,24 @@ internal fun ColumnScope.SessionWorkspace(
             Toast.makeText(context, if (ok) "对话已导出" else "导出失败，请换一个保存位置", Toast.LENGTH_SHORT).show()
         }
         exportText = ""
+    }
+    val scope = rememberCoroutineScope()
+    var exportingEvidence by remember(session?.id) { mutableStateOf(false) }
+    val exportEvidence = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        val sessionId = session?.id
+        if (uri != null && sessionId != null) scope.launch {
+            exportingEvidence = true
+            runCatching { withContext(Dispatchers.IO) {
+                val bytes = controller.evidenceBundle(sessionId)
+                context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(bytes) } ?: error("无法写入")
+                bytes.size
+            } }.onSuccess {
+                Toast.makeText(context, "证据包已导出（${if (it < 1024) "$it B" else "${it / 1024} KB"}）", Toast.LENGTH_LONG).show()
+            }.onFailure {
+                Toast.makeText(context, "证据包导出失败：${it.message ?: "请换个保存位置"}", Toast.LENGTH_LONG).show()
+            }
+            exportingEvidence = false
+        }
     }
     if (attachmentPicker) AttachmentPickerSheet(controller, workspaceId, settings.model, attachments, onDismiss = { attachmentPicker = false }, onDone = {
         attachments = it; controller.saveAttachmentDraft(session?.id, workspaceId, it); attachmentPicker = false
@@ -257,6 +278,12 @@ internal fun ColumnScope.SessionWorkspace(
                                 DropdownMenuItem(text = { Text("记住的信息") }, onClick = { extras = false; focus.clearFocus(); onDetail(1) })
                                 DropdownMenuItem(text = { Text("命名与整理") }, onClick = { extras = false; organizing = true })
                                 DropdownMenuItem(text = { Text("导出对话") }, onClick = { extras = false; exportText = session.exportMarkdown(); export.launch("对话-${session.id.take(8)}.md") })
+                                DropdownMenuItem(text = { Text(if (exportingEvidence) "正在打包证据包…" else "导出证据包") }, enabled = !exportingEvidence, onClick = {
+                                    extras = false
+                                    runCatching { controller.evidenceFileName(session.id) }
+                                        .onSuccess { exportEvidence.launch(it) }
+                                        .onFailure { Toast.makeText(context, it.message ?: "无法打包", Toast.LENGTH_LONG).show() }
+                                })
                                 DropdownMenuItem(text = { Text(if (session.archived) "移出归档" else "归档对话") }, enabled = session.status != SessionStatus.RUNNING && question == null,
                                     onClick = { extras = false; controller.archiveSession(session.id, !session.archived) })
                                 DropdownMenuItem(text = { Text("删除对话", color = MaterialTheme.colorScheme.error) }, enabled = session.status != SessionStatus.RUNNING, onClick = { extras = false; deleting = true })

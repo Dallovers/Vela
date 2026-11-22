@@ -83,6 +83,16 @@ class AgentController(context: Context) {
         trackPendingQuestion()
     }
     fun exportRunLogs(): String = journal.export()
+    fun evidenceFileName(sessionId: String): String {
+        val session = state.value.sessions.firstOrNull { it.id == sessionId } ?: error("没有找到这个对话")
+        return EvidenceBundle.fileName(session.title, session.id, System.currentTimeMillis())
+    }
+    /** 在 IO 线程调用：打包不碰截图、不碰密钥，只读已落盘的会话与运行日志。 */
+    fun evidenceBundle(sessionId: String): ByteArray {
+        val session = state.value.sessions.firstOrNull { it.id == sessionId } ?: error("没有找到这个对话")
+        val entries = EvidenceBundle.build(session, journal.export(), settingsStore.modelName(), System.currentTimeMillis())
+        return EvidenceBundle.zip(entries)
+    }
     fun recentRunLogs(): List<String> = journal.export().lineSequence().filter(String::isNotBlank).toList().takeLast(60).mapNotNull { line ->
         runCatching { org.json.JSONObject(line).let { row ->
             val time = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(row.getLong("time")))
