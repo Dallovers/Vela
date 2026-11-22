@@ -11,7 +11,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +26,10 @@ import kotlinx.coroutines.withContext
 internal fun WorkspacePickerSheet(controller: AgentController, state: AgentState, onDismiss: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
+    var notice by remember { mutableStateOf("") }
+    var menuFor by remember { mutableStateOf<String?>(null) }
+    var renaming by remember { mutableStateOf<WorkspaceInfo?>(null) }
+    var removing by remember { mutableStateOf<WorkspaceInfo?>(null) }
     var picking by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     if (picking) {
         PhoneFolderPicker(controller, { picking = false }, { picking = false; onDismiss() })
@@ -35,9 +42,19 @@ internal fun WorkspacePickerSheet(controller: AgentController, state: AgentState
             Button({ picking = true }, modifier = Modifier.fillMaxWidth()) { Text("打开手机文件夹") }
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(state.workspaces, key = { it.id }) { item ->
-                    OutlinedButton(onClick = {
-                        runCatching { controller.chooseWorkspace(item.id) }.onSuccess { onDismiss() }.onFailure { error = it.message ?: "切换失败" }
-                    }, modifier = Modifier.fillMaxWidth()) { Text((if (item.id == state.activeWorkspaceId) "当前 · " else "") + (item.phone?.let { "${item.name} · ${it.volume}/${it.path}" } ?: item.name)) }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        OutlinedButton(onClick = {
+                            runCatching { controller.chooseWorkspace(item.id) }.onSuccess { onDismiss() }.onFailure { error = it.message ?: "切换失败" }
+                        }, modifier = Modifier.weight(1f)) { Text((if (item.id == state.activeWorkspaceId) "当前 · " else "") + (item.phone?.let { "${item.name} · ${it.volume}/${it.path}" } ?: item.name)) }
+                        // The default workspace is built in, so it has nothing to rename or remove.
+                        if (item.id != WorkspacePaths.DEFAULT) Box {
+                            IconButton(onClick = { menuFor = item.id }, modifier = Modifier.semantics { contentDescription = "${item.name} 的操作" }) { AgentGlyph("more") }
+                            DropdownMenu(expanded = menuFor == item.id, onDismissRequest = { menuFor = null }) {
+                                DropdownMenuItem(text = { Text("改名") }, onClick = { menuFor = null; renaming = item })
+                                DropdownMenuItem(text = { Text("移除") }, onClick = { menuFor = null; removing = item })
+                            }
+                        }
+                    }
                 }
             }
             OutlinedTextField(name, { name = it.take(40) }, label = { Text("新工作区名称") }, modifier = Modifier.fillMaxWidth())
@@ -45,8 +62,40 @@ internal fun WorkspacePickerSheet(controller: AgentController, state: AgentState
                 controller.createWorkspace(name).onSuccess { onDismiss() }.onFailure { error = it.message ?: "创建失败" }
             }, enabled = name.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("创建工作区") }
             if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
+            if (notice.isNotBlank()) Text(notice, color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(16.dp))
         }
+    }
+    renaming?.let { target ->
+        var value by remember(target.id) { mutableStateOf(target.name) }
+        AlertDialog(onDismissRequest = { renaming = null },
+            title = { Text("工作区改名") },
+            text = { OutlinedTextField(value, { value = it.take(40) }, label = { Text("名称") }, singleLine = true) },
+            confirmButton = { TextButton(onClick = {
+                error = ""
+                controller.renameWorkspace(target.id, value)
+                    .onSuccess { renaming = null; notice = "已改名" }
+                    .onFailure { error = it.message ?: "改名失败" }
+            }, enabled = value.isNotBlank()) { Text("保存") } },
+            dismissButton = { TextButton({ renaming = null }) { Text("取消") } })
+    }
+    removing?.let { target ->
+        AlertDialog(onDismissRequest = { removing = null },
+            title = { Text("移除工作区「${target.name}」？") },
+            text = {
+                Text(if (target.phone != null) "只从列表里移除，手机文件夹里的文件不会被删。"
+                    else "只从列表里移除，工作区里的文件不会被删，之后会显示它们还在哪里。")
+            },
+            confirmButton = { TextButton(onClick = {
+                error = ""
+                controller.deleteWorkspace(target.id)
+                    .onSuccess { kept ->
+                        removing = null
+                        notice = if (kept != null) "已移除，文件仍在 ${kept.absolutePath}" else "已移除"
+                    }
+                    .onFailure { removing = null; error = it.message ?: "移除失败" }
+            }) { Text("移除", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton({ removing = null }) { Text("取消") } })
     }
 }
 
