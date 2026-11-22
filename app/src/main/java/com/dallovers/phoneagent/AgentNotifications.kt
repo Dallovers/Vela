@@ -39,6 +39,7 @@ class AgentNotifications(private val context: Context) {
 
     fun clearQuestion() { manager.cancel(41) }
     fun clearCompleted() { manager.cancel(42) }
+    fun clearAll() { clearQuestion(); clearCompleted() }
 
     private fun blocked(channelId: String, name: String, importance: Int): String? {
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -67,9 +68,9 @@ internal object CompletionNoticeRules {
     fun justFinished(previous: SessionStatus, next: SessionStatus): Boolean =
         previous == SessionStatus.RUNNING && next == SessionStatus.COMPLETED
 
-    /** 正看着这个对话就不用打扰；切到别的对话或者退到后台才提醒。 */
-    fun shouldPost(foreground: Boolean, selectedSessionId: String?, sessionId: String): Boolean =
-        !(foreground && selectedSessionId == sessionId)
+    /** 正看着这个对话就不用打扰；切到别的对话或者退到后台才提醒。关掉开关后一律不提醒。 */
+    fun shouldPost(enabled: Boolean, foreground: Boolean, selectedSessionId: String?, sessionId: String): Boolean =
+        enabled && !(foreground && selectedSessionId == sessionId)
 
     fun title(sessionTitle: String): String = "「${summary(sessionTitle)}」已完成"
 

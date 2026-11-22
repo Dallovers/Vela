@@ -17,10 +17,19 @@ class CompletionNoticeTest {
     }
 
     @Test fun watchingTheSameConversationIsNotDisturbed() {
-        assertFalse(CompletionNoticeRules.shouldPost(foreground = true, selectedSessionId = "s1", sessionId = "s1"))
-        assertTrue(CompletionNoticeRules.shouldPost(foreground = true, selectedSessionId = "s2", sessionId = "s1"))
-        assertTrue(CompletionNoticeRules.shouldPost(foreground = true, selectedSessionId = null, sessionId = "s1"))
-        assertTrue(CompletionNoticeRules.shouldPost(foreground = false, selectedSessionId = "s1", sessionId = "s1"))
+        assertFalse(CompletionNoticeRules.shouldPost(true, foreground = true, selectedSessionId = "s1", sessionId = "s1"))
+        assertTrue(CompletionNoticeRules.shouldPost(true, foreground = true, selectedSessionId = "s2", sessionId = "s1"))
+        assertTrue(CompletionNoticeRules.shouldPost(true, foreground = true, selectedSessionId = null, sessionId = "s1"))
+        assertTrue(CompletionNoticeRules.shouldPost(true, foreground = false, selectedSessionId = "s1", sessionId = "s1"))
+    }
+
+    @Test fun theInAppSwitchBeatsEveryOtherCondition() {
+        for (visible in listOf(true, false)) {
+            for (selected in listOf(null, "s1", "s2")) {
+                assertFalse("关掉开关后 $visible/$selected 都不该发",
+                    CompletionNoticeRules.shouldPost(false, foreground = visible, selectedSessionId = selected, sessionId = "s1"))
+            }
+        }
     }
 
     @Test fun titleIsOneShortLineAndNeverEmpty() {

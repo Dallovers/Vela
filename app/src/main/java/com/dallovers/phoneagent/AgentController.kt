@@ -79,6 +79,8 @@ class AgentController(context: Context) {
     private var reminderJob: Job? = null
     /** 界面是否在前台。只有前台且正看着这条会话时才不打扰。 */
     private var foreground = false
+    /** 应用内通知开关，默认开。关掉后两类通知都不发，系统权限本身不动。 */
+    private var notificationsOn = settingsStore.notificationsEnabled()
 
     init {
         journal.record("process_started", count = restoredSessions.count { it.status == SessionStatus.PAUSED })
@@ -88,6 +90,14 @@ class AgentController(context: Context) {
     fun setForeground(visible: Boolean) {
         foreground = visible
         if (visible) notifications.clearCompleted()
+    }
+    fun notificationsEnabled(): Boolean = notificationsOn
+    /** 关掉时把已经挂着的通知一起收掉，不留一条点不动的旧提醒。 */
+    fun setNotificationsEnabled(enabled: Boolean) {
+        notificationsOn = enabled
+        runCatching { settingsStore.setNotificationsEnabled(enabled) }.onFailure { status(it.message ?: "通知设置保存失败") }
+        if (!enabled) notifications.clearAll()
+        journal.record("notification_setting", phase = if (enabled) "enabled" else "disabled")
     }
     fun exportRunLogs(): String = journal.export()
     fun recentRunLogs(): List<String> = journal.export().lineSequence().filter(String::isNotBlank).toList().takeLast(60).mapNotNull { line ->
@@ -124,6 +134,10 @@ class AgentController(context: Context) {
     }
 
     private fun postQuestionReminder(session: TaskSession, urgent: Boolean, force: Boolean = false) {
+        if (!notificationsOn) {
+            journal.record("question_notification", session.id, session.question?.taskId.orEmpty(), phase = "disabled")
+            return
+        }
         if (!force && (notificationUrgent == urgent || notificationUrgent == true)) return
         val result = notifications.showQuestion(session.id, urgent)
         notificationUrgent = urgent
@@ -697,8 +711,8 @@ class AgentController(context: Context) {
     }
 
     private fun noticeCompleted(session: TaskSession) {
-        if (!CompletionNoticeRules.shouldPost(foreground, state.value.selectedSessionId, session.id)) {
-            journal.record("completion_notification", session.id, phase = "skipped_foreground")
+        if (!CompletionNoticeRules.shouldPost(notificationsOn, foreground, state.value.selectedSessionId, session.id)) {
+            journal.record("completion_notification", session.id, phase = if (notificationsOn) "skipped_foreground" else "disabled")
             return
         }
         val result = notifications.showCompleted(session.id, session.title, session.mode)

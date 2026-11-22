@@ -50,6 +50,12 @@ class SettingsStore(context: Context) {
         check(preferences.edit().putString("appearance", value).commit())
     }
 
+    /** 默认开。关掉只是应用不再发通知，系统通知权限本身不动。 */
+    fun notificationsEnabled(): Boolean = preferences.getBoolean("notifications", true)
+    fun setNotificationsEnabled(enabled: Boolean) {
+        check(preferences.edit().putBoolean("notifications", enabled).commit()) { "通知设置保存失败，请重试" }
+    }
+
     fun profiles(): List<ModelProfile> {
         val rows = org.json.JSONArray(preferences.getString("profiles", "[]"))
         return (0 until rows.length()).map { i -> rows.getJSONObject(i).let {
